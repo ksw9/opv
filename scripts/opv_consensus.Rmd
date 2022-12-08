@@ -6,4 +6,51 @@ date: "2022-12-08"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Users/kwalter/Box/Box/Polio/opv/')
+library(tidyverse)
+library(ggsci)
+library(ggthemes)
+```
+
+```{r fig1}
+cnty_dat <- read_csv('data/who/country_summary_2020-2022.csv')
+world_dat <- read_csv('data/who/global_polio_2000-2022.csv')
+
+# Plot world data.
+p1 <- world_dat %>% pivot_longer(cols = c(`cVDPV Cases`, `Wild poliovirus cases`), names_to = 'case_type', values_to = 'case_count') %>%
+  ggplot(aes(x = Year, y = case_count, color = case_type)) + 
+  geom_point() + geom_line() + theme_classic() + 
+  ylab('Global confirmed cases') + scale_color_lancet(name=NULL)
+
+# Summarize country data for 2020-2022.
+cnty_summary <- cnty_dat %>%
+  group_by(`Country / Territory / Region`) %>%
+  summarize(wpv = sum(`Wild poliovirus Cases`), 
+            cdvpv = sum(`cVDPV Cases`))
+
+# Load map data
+world_map = map_data("world")
+
+# Check that country names with any reported cases are consistent with map names.
+cntys = cnty_summary %>% filter(wpv>0 | cdvpv>0) %>% pull(`Country / Territory / Region`) 
+
+cntys[!cntys %in% unique(world_map$region)]
+
+# Rename countries to map name. 
+cnty_summary <- cnty_summary %>% 
+  mutate(country = case_when(`Country / Territory / Region` == 'Congo' ~ "Democratic Republic of the Congo", 
+                  `Country / Territory / Region` == "Côte d'Ivoire" ~ "Ivory Coast",
+                  `Country / Territory / Region` == "United States of America" ~ "USA",
+                  TRUE ~ `Country / Territory / Region` ))
+
+countries = world_map %>% 
+  distinct(region) %>% 
+  rowid_to_column()
+
+countries %>% 
+  ggplot(aes(fill = rowid, map_id = region)) +
+  geom_map(map = world_map) +
+  expand_limits(x = world_map$long, y = world_map$lat) +
+  theme_map()
+
 ```
