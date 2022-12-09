@@ -10,6 +10,9 @@ knitr::opts_knit$set(root.dir = '/Users/kwalter/Box/Box/Polio/opv/')
 library(tidyverse)
 library(ggsci)
 library(ggthemes)
+library(cowplot)
+
+plot_dir = 'plots/'
 ```
 
 ```{r fig1}
@@ -20,7 +23,8 @@ world_dat <- read_csv('data/who/global_polio_2000-2022.csv')
 p1 <- world_dat %>% pivot_longer(cols = c(`cVDPV Cases`, `Wild poliovirus cases`), names_to = 'case_type', values_to = 'case_count') %>%
   ggplot(aes(x = Year, y = case_count, color = case_type)) + 
   geom_point() + geom_line() + theme_classic() + 
-  ylab('Global confirmed cases') + scale_color_lancet(name=NULL)
+  ylab('Global confirmed cases') + scale_color_lancet(name=NULL) + 
+  theme(legend.position="bottom")
 
 # Summarize country data for 2020-2022.
 cnty_summary <- cnty_dat %>%
@@ -30,7 +34,6 @@ cnty_summary <- cnty_dat %>%
 
 # Load map data
 world_map = map_data("world")
-
 # Check that country names with any reported cases are consistent with map names.
 cntys = cnty_summary %>% filter(wpv>0 | cdvpv>0) %>% pull(`Country / Territory / Region`) 
 
@@ -43,14 +46,28 @@ cnty_summary <- cnty_summary %>%
                   `Country / Territory / Region` == "United States of America" ~ "USA",
                   TRUE ~ `Country / Territory / Region` ))
 
+# Add polio data to countrys dataframe.
 countries = world_map %>% 
   distinct(region) %>% 
-  rowid_to_column()
+  rowid_to_column() %>%
+  left_join(cnty_summary, by = c('region'='country')) %>%
+  mutate(wpv = replace_na(wpv,0),
+         cdvpv = replace_na(cdvpv,0))
 
-countries %>% 
-  ggplot(aes(fill = rowid, map_id = region)) +
+# Plot country reports of cVDPV
+p2 <- ggplot(data = countries, aes(fill = cdvpv, map_id = region)) +
   geom_map(map = world_map) +
   expand_limits(x = world_map$long, y = world_map$lat) +
-  theme_map()
+  theme_map() +
+  scale_fill_viridis_c(name = 'cVDPV cases\n2020-2022') +
+  theme(legend.text=element_text(size=8), legend.title = element_text(size=10))
 
+p2_legend <- get_legend(p2)
+p2 <- p2 + theme(legend.position='none')
+
+# Plot together
+p3 <- plot_grid(p1,p2,p2_legend,labels = c('a','b',NULL), ncol = 3, rel_widths = c(1,1,.3))
+ggsave(p3, filename = paste(plot_dir,'fig1.pdf',sep = ''),height = 4,width=8)
 ```
+
+```{r }
